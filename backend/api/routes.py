@@ -95,6 +95,11 @@ async def analyze_resume(
         validation_pct  = svd_raw.get('validation_pct', 0.0),
     )
 
+    critical_issues = [
+        issue.issue_title for issue in detailed_fb
+        if str(getattr(issue, 'severity_level', '')).lower() in ('critical', 'high')
+    ]
+
     response = AnalysisResponse(
         ATS_score=result['ats_score'],
         component_scores=ComponentScores(**result['component_scores']),
@@ -102,6 +107,8 @@ async def analyze_resume(
         detailed_feedback=detailed_fb,
         jd_match_analysis=jd_comparison_result,
         skill_validation_details=skill_val_details,
+        strengths=result.get('strengths', []),
+        critical_issues=critical_issues,
 
         # Retro-compatibility fields
         ats_score=result['ats_score'],

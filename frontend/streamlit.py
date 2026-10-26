@@ -27,6 +27,21 @@ for key, default in [
     if key not in st.session_state:
         st.session_state[key] = default
 
+# Access tokens expire (~1h). Refresh shortly before expiry so the backend never sees a stale token.
+if st.session_state.access_token and st.session_state.refresh_token:
+    from frontend.services import supabase_client
+    if supabase_client.token_expires_in(st.session_state.access_token) < 120:
+        refreshed = supabase_client.refresh_session(st.session_state.refresh_token)
+        if "error" in refreshed:
+            for k in ("access_token", "refresh_token", "user_id", "user_email"):
+                st.session_state[k] = None
+            st.session_state.auth_error = "Your session expired — please sign in again."
+        else:
+            st.session_state.access_token  = refreshed["access_token"]
+            st.session_state.refresh_token = refreshed["refresh_token"]
+            st.session_state.user_id       = refreshed["user_id"]
+            st.session_state.user_email    = refreshed["email"]
+
 # If we just came back from Google OAuth, Supabase appends `?code=<authcode>`
 # to the redirect URL. Exchange it for a session before rendering anything.
 if (
@@ -104,6 +119,15 @@ with st.sidebar:
             st.info(st.session_state.auth_info)
             st.session_state.auth_info = None
 
+        config_problem = supabase_client.config_error()
+        if config_problem:
+            st.warning(
+                f"⚙️ {config_problem}\n\n"
+                "Add to `.env` in the project root:\n"
+                "`SUPABASE_URL=...` and `SUPABASE_ANON_KEY=...`\n\n"
+                "Then restart Streamlit."
+            )
+
         tab_in, tab_up = st.tabs(["Sign in", "Sign up"])
 
         with tab_in:
@@ -145,7 +169,7 @@ with st.sidebar:
         st.markdown("<div style='text-align:center; margin: 8px 0; color:#94a3b8;'>or</div>",
                     unsafe_allow_html=True)
 
-        oauth = supabase_client.google_oauth_url()
+        oauth = supabase_client.google_oauth_url() if not config_problem else {"error": config_problem}
         if "error" in oauth:
             st.caption(f"Google sign-in unavailable: {oauth['error']}")
         else:

@@ -68,9 +68,9 @@ def render():
     with col3:
         st.markdown("""
         ### 🔒 Privacy First
-        All analysis runs locally with no external API calls. Your resume data never leaves your system.
-        
-        **100% Private & Secure**
+        Resume text is sent to our AI parser (Groq) for analysis. Signed-in history is stored in your account database.
+
+        **Review what you upload before submitting**
         """)
     
     st.markdown("---")
@@ -89,7 +89,7 @@ def render():
     with col2:
         st.markdown("""
         #### 2️⃣ AI Analysis
-        Our local AI models analyze your resume across multiple dimensions
+        AI models analyze your resume across multiple dimensions
         """)
     
     with col3:
