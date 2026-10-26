@@ -1,5 +1,8 @@
+import base64
+import json
 import os
 import logging
+import time
 from pathlib import Path
 from typing import Any, Dict
 import streamlit as st
@@ -16,12 +19,16 @@ except ImportError:
 
 
 def _secret(key: str, section: str = 'supabase') -> str:
-    """Read from env first, then fall back to st.secrets[section][key]."""
+    """Read from env first, then st.secrets[section][key], then top-level st.secrets[key]."""
     val = os.getenv(key, '')
     if val:
         return val
     try:
         return st.secrets[section][key]
+    except (KeyError, FileNotFoundError, AttributeError):
+        pass
+    try:
+        return st.secrets[key]
     except (KeyError, FileNotFoundError, AttributeError):
         return ''
 
@@ -40,6 +47,11 @@ def _missing_config() -> str | None:
     if not SUPABASE_URL or not SUPABASE_ANON_KEY:
         return 'Supabase is not configured — set SUPABASE_URL and SUPABASE_ANON_KEY in .env or .streamlit/secrets.toml'
     return None
+
+
+def config_error() -> str | None:
+    """Public check for the UI: why sign-in is unavailable, or None when configured."""
+    return _missing_config()
 
 
 @st.cache_resource
@@ -125,6 +137,32 @@ def exchange_code_for_session(auth_code: str) -> Dict[str, Any]:
         return _session_dict(resp.session, resp.user)
     except Exception as exc:
         logger.warning(f'exchange_code_for_session failed: {exc}')
+        return {'error': _humanize(exc)}
+
+
+def token_expires_in(access_token: str) -> float:
+    """Seconds until the JWT `exp` claim. Reads the payload only; the backend does real verification."""
+    try:
+        payload_b64 = access_token.split('.')[1]
+        payload_b64 += '=' * (-len(payload_b64) % 4)
+        payload = json.loads(base64.urlsafe_b64decode(payload_b64))
+        return float(payload.get('exp', 0)) - time.time()
+    except Exception:
+        return 0.0
+
+
+def refresh_session(refresh_token: str) -> Dict[str, Any]:
+    """Exchange a refresh token for a new access token. Supabase rotates refresh tokens, so store the returned one."""
+    err = _missing_config()
+    if err:
+        return {'error': err}
+    try:
+        resp = get_client().auth.refresh_session(refresh_token)
+        if not resp.session or not resp.user:
+            return {'error': 'Session refresh returned no session'}
+        return _session_dict(resp.session, resp.user)
+    except Exception as exc:
+        logger.warning(f'refresh_session failed: {exc}')
         return {'error': _humanize(exc)}
 
 

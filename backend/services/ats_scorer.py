@@ -91,8 +91,11 @@ def _calculate_semantic_similarity(skill: str, text: str, embedder: SentenceTran
 
 def _skill_matches(skill: str, text: str, embedder: SentenceTransformer, threshold: float) -> Tuple[bool, float]:
 
-    #fast, o(n) directly check if skill is a substring of the text (case-insensitive)
-    if skill.lower() in text.lower():
+    #fast check: whole-token match only, so 'R' does not match 'react' and 'java' does not match 'javascript'
+    if not skill.strip():
+        return False, 0.0
+    token_pattern = r'(?<![A-Za-z0-9])' + re.escape(skill.strip()) + r'(?![A-Za-z0-9])'
+    if re.search(token_pattern, text, re.IGNORECASE):
         return True, 1.0
     
     #slow, semantic similarity check using sentence embeddings
@@ -242,8 +245,10 @@ def _calc_content_score(
     achievement_count = sum(len(re.findall(p, text, re.IGNORECASE)) for p in number_patterns)
     score += _tier_score(achievement_count, [(10,5.0),(7,4.0),(5,3.0),(3,2.0),(1,1.0)])
 
-    grammar_penalty = grammar_results.get('penalty_applied', 0.0)
-    score += max(0.0, 10.0 - grammar_penalty / 2.0)
+    # Grammar checker unavailable → no points earned (don't award free credit)
+    if grammar_results.get('_component_status') != 'unavailable':
+        grammar_penalty = grammar_results.get('penalty_applied', 0.0)
+        score += max(0.0, 10.0 - grammar_penalty / 2.0)
 
     return min(25.0, max(0.0, score))
 
@@ -347,7 +352,10 @@ def calculate_overall_score(
         bonuses['good_skill_validation'] = 1.0
         score += 1.0
 
-    if grammar_results.get('total_errors', 0) == 0:
+    if (
+        grammar_results.get('_component_status') != 'unavailable'
+        and grammar_results.get('total_errors', 0) == 0
+    ):
         bonuses['perfect_grammar'] = 1.0
         score += 1.0
 

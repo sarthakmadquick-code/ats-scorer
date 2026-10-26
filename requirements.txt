@@ -6,6 +6,17 @@ pandas
 numpy
 scikit-learn
 pypdf
+PyPDF2
+pdfplumber
 python-docx
+python-magic
 requests
 httpx
+fastapi
+uvicorn
+pydantic
+PyJWT
+rapidfuzz
+spacy
+sentence-transformers
+playwright
